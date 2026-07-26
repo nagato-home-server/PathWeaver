@@ -13,6 +13,7 @@ VPP / strongSwan 連携を見据えた、第一段階 Controller の C 実装で
 - generated runtimeからstrongSwan IPsecとVPP forwardingを連続制御する。
 
 提出向けの到達点、デモで何を見せるか、本番実装との差分は `docs/mitou-submission-status.md` に詳しく整理しています。
+今後どのファイル・関数に何を実装するかは `docs/future-implementation-map.md` にまとめています。
 
 一発デモ:
 
@@ -169,3 +170,5 @@ Linux VM の共有フォルダで試す場合は、`scripts/README-linux-vm.md` 
 他作業者向けのファイル構成、主要関数、生成出力の説明は `docs/worker-guide.md` を参照してください。
 
 scenario harness と本番 `eventnetd` の差分は `docs/scenario-vs-production.md` を参照してください。
+
+後続実装の具体的な配置先、関数案、出力ファイル案は `docs/future-implementation-map.md` を参照してください。

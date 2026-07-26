@@ -452,6 +452,8 @@ GUIは後段です。現時点ではCLI、script、JSONL、text outputで実証�
 
 ## 9. 次に実装する候補
 
+具体的な実装場所、関数案、出力ファイル案は `docs/future-implementation-map.md` に分けて整理しています。
+
 未踏提出までに追加すると効果が大きい順:
 
 1. **簡易 `eventnetd --once` / `--loop`**

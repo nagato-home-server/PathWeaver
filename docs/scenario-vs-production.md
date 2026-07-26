@@ -204,6 +204,8 @@ productionへ持ち込まなくてよいもの:
 
 ## 8. 実装順
 
+具体的なファイル配置、関数名、出力先は `docs/future-implementation-map.md` にまとめています。
+
 推奨順:
 
 1. `eventnet_scenario --once` を作る。

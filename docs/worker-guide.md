@@ -560,3 +560,5 @@ sudo sh scripts/vm-netns-ipsec-hub-stop.sh
 
 - `docs/scenario-vs-production.md`
   - `eventnet_scenario` と本番 `eventnetd` の差分、共通化する部分、本番化までに必要な実装を整理している。
+- `docs/future-implementation-map.md`
+  - 次に実装するファイル、関数、出力、後回しにする領域を具体的に整理している。
