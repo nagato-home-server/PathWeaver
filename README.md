@@ -114,3 +114,5 @@ Linux 実機では `swanctl`、`vppctl`、root 権限、VPP 側の next-hop 到�
 ## Linux VM Scripts
 
 Linux VM の共有フォルダで試す場合は、`scripts/README-linux-vm.md` の順序で実行してください。
+
+他作業者向けのファイル構成、主要関数、生成出力の説明は `docs/worker-guide.md` を参照してください。
