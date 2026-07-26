@@ -318,3 +318,32 @@ sudo sh scripts/vm-vpp-controller-netns-smoke.sh samples/linux-vm-netns.yaml
 ```
 
 この smoke test は `eventnet_netns_plan` が生成する `out/netns-runtime/vpp-netns-route-plan.sh` を `DRY_RUN=0` で適用し、`10.10.1.0/24 <-> 10.10.2.0/24` の LAN traffic が VPP 経由で流れることを確認します。
+
+## 12. Integrated IPsec + VPP Runtime Smoke
+
+controller が選んだ path から、IPsec runtime と VPP netns forwarding を一つの生成 plan で連続制御します。
+
+```sh
+sudo sh scripts/vm-controller-integrated-runtime-smoke.sh samples/linux-vm-netns.yaml
+```
+
+fallback/hub も同じ入口で確認できます。
+
+```sh
+sudo MODE=fallback sh scripts/vm-controller-integrated-runtime-smoke.sh samples/linux-vm-netns.yaml
+sudo MODE=both sh scripts/vm-controller-integrated-runtime-smoke.sh samples/linux-vm-netns.yaml
+```
+
+生成される統合 runtime:
+
+- `out/netns-runtime/apply-integrated.sh`
+
+この段階の統合は、同一 controller-generated plan の中で次を連続して行うものです。
+
+- selected path の IPsec tunnel 起動
+- IPsec smoke による ESP counter 確認
+- VPP host-interface setup
+- YAML `vpp_edges` から生成した VPP route 適用
+- VPP forwarding smoke
+
+まだ「同一packetをIPsec復号後にVPPで転送する本番gateway pipeline」ではありません。そこは次段階で、Linux/VPP interface設計とXFRM/VPP接続を詰めます。

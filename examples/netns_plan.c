@@ -91,6 +91,61 @@ static int write_apply_script(const char *filename, const en_path_t *path, const
     return 0;
 }
 
+static int write_integrated_script(const char *filename, const en_path_t *path, const char *kind)
+{
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        return 1;
+    }
+    fprintf(file, "#!/usr/bin/env sh\n");
+    fprintf(file, "set -eu\n\n");
+    fprintf(file, "ROOT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")/../..\" && pwd)\n");
+    fprintf(file, "cd \"$ROOT_DIR\"\n\n");
+    fprintf(file, "if [ \"$(id -u)\" != \"0\" ]; then\n");
+    fprintf(file, "  printf 'Re-running integrated runtime as root...\\n'\n");
+    fprintf(file, "  exec sudo sh \"$0\" \"$@\"\n");
+    fprintf(file, "fi\n\n");
+    fprintf(file, "ensure_dummy_lan() {\n");
+    fprintf(file, "  ns=\"$1\"\n");
+    fprintf(file, "  addr=\"$2\"\n");
+    fprintf(file, "  ip netns exec \"$ns\" ip link show lan0 >/dev/null 2>&1 || \\\n");
+    fprintf(file, "    ip netns exec \"$ns\" ip link add lan0 type dummy\n");
+    fprintf(file, "  ip netns exec \"$ns\" ip addr flush dev lan0\n");
+    fprintf(file, "  ip netns exec \"$ns\" ip addr add \"$addr\" dev lan0\n");
+    fprintf(file, "  ip netns exec \"$ns\" ip link set lan0 up\n");
+    fprintf(file, "}\n\n");
+    fprintf(file, "apply_vpp_netns_runtime() {\n");
+    fprintf(file, "  sh scripts/vm-vpp-netns-setup.sh\n");
+    fprintf(file, "  DRY_RUN=0 sh out/netns-runtime/vpp-netns-route-plan.sh\n");
+    fprintf(file, "  ip netns exec site-a ip route replace 10.10.2.0/24 via 172.16.1.1\n");
+    fprintf(file, "  ip netns exec site-b ip route replace 10.10.1.0/24 via 172.16.2.1\n");
+    fprintf(file, "  printf '\\n== integrated VPP forwarding: site-a -> site-b ==\\n'\n");
+    fprintf(file, "  ip netns exec site-a ping -c 3 -I 10.10.1.1 10.10.2.1\n");
+    fprintf(file, "  printf '\\n== integrated VPP forwarding: site-b -> site-a ==\\n'\n");
+    fprintf(file, "  ip netns exec site-b ping -c 3 -I 10.10.2.1 10.10.1.1\n");
+    fprintf(file, "}\n\n");
+    fprintf(file, "printf 'eventnet integrated selected path: %s\\n'\n", path->path_id);
+    fprintf(file, "printf 'eventnet integrated runtime kind: %s\\n'\n\n", kind);
+    fprintf(file, "ensure_dummy_lan site-a 10.10.1.1/24\n");
+    fprintf(file, "ensure_dummy_lan site-b 10.10.2.1/24\n\n");
+    if (strcmp(kind, "direct") == 0) {
+        fprintf(file, "sh scripts/vm-netns-ipsec-hub-stop.sh 2>/dev/null || true\n");
+        fprintf(file, "sh scripts/vm-netns-ipsec-direct-start.sh\n");
+        fprintf(file, "sh scripts/vm-netns-ipsec-direct-smoke.sh\n");
+    } else if (strcmp(kind, "hub") == 0) {
+        fprintf(file, "sh scripts/vm-netns-ipsec-direct-stop.sh 2>/dev/null || true\n");
+        fprintf(file, "sh scripts/vm-netns-ipsec-hub-start.sh\n");
+        fprintf(file, "sh scripts/vm-netns-ipsec-hub-smoke.sh\n");
+    } else {
+        fprintf(file, "echo 'unsupported path for current integrated runtime: %s' >&2\n", path->path_id);
+        fprintf(file, "exit 1\n");
+    }
+    fprintf(file, "\napply_vpp_netns_runtime\n");
+    fprintf(file, "printf '\\nIntegrated controller runtime passed: IPsec path and VPP forwarding were controlled from one generated plan.\\n'\n");
+    fclose(file);
+    return 0;
+}
+
 static int write_summary(const char *filename, const en_yaml_config_t *config, const en_path_t *path, const char *kind)
 {
     FILE *file = fopen(filename, "w");
@@ -377,16 +432,22 @@ selected:
 
     const char *kind = runtime_kind(selected_path);
     char apply_script[256] = {0};
+    char integrated_script[256] = {0};
     char summary[256] = {0};
     char vpp_plan[256] = {0};
     char vpp_netns_plan[256] = {0};
     snprintf(apply_script, sizeof(apply_script), "%s/apply-selected.sh", out_dir);
+    snprintf(integrated_script, sizeof(integrated_script), "%s/apply-integrated.sh", out_dir);
     snprintf(summary, sizeof(summary), "%s/selected-path.txt", out_dir);
     snprintf(vpp_plan, sizeof(vpp_plan), "%s/vpp-route-plan.sh", out_dir);
     snprintf(vpp_netns_plan, sizeof(vpp_netns_plan), "%s/vpp-netns-route-plan.sh", out_dir);
 
     if (write_apply_script(apply_script, selected_path, kind) != 0) {
         fprintf(stderr, "failed to write %s\n", apply_script);
+        return 1;
+    }
+    if (write_integrated_script(integrated_script, selected_path, kind) != 0) {
+        fprintf(stderr, "failed to write %s\n", integrated_script);
         return 1;
     }
     if (write_summary(summary, &config, selected_path, kind) != 0) {
@@ -407,6 +468,7 @@ selected:
     printf("runtime_kind: %s\n", kind);
     printf("reason: %s\n", reason);
     printf("wrote: %s\n", apply_script);
+    printf("wrote: %s\n", integrated_script);
     printf("wrote: %s\n", summary);
     printf("wrote: %s\n", vpp_plan);
     printf("wrote: %s\n", vpp_netns_plan);
