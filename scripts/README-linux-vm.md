@@ -300,6 +300,9 @@ sudo sh scripts/vm-vpp-netns-smoke.sh
 - `site-a:vpp-client 172.16.1.2/30` <-> `VPP host-vpp-site-a 172.16.1.1/30`
 - `site-b:vpp-client 172.16.2.2/30` <-> `VPP host-vpp-site-b 172.16.2.1/30`
 
+この VPP edge 情報は `samples/linux-vm-netns.yaml` の `vpp_edges:` にも定義します。
+`eventnet_netns_plan` が生成する `vpp-netns-route-plan.sh` は、この YAML mapping の `node_id` と `next_hop` を使って VPP route を作ります。
+
 片付け:
 
 ```sh

@@ -9,7 +9,8 @@ typedef enum {
     YAML_SECTION_NONE = 0,
     YAML_SECTION_TUNNELS,
     YAML_SECTION_PATHS,
-    YAML_SECTION_INTENTS
+    YAML_SECTION_INTENTS,
+    YAML_SECTION_VPP_EDGES
 } yaml_top_section_t;
 
 typedef enum {
@@ -34,6 +35,7 @@ typedef struct {
     en_segment_t *segment;
     en_tunnel_t *tunnel;
     en_intent_t *intent;
+    en_vpp_edge_t *vpp_edge;
 } yaml_parse_state_t;
 
 static void set_error(char *error, size_t error_len, size_t line_no, const char *message);
@@ -47,6 +49,7 @@ static en_error_code_t parse_tunnel_kv(yaml_parse_state_t *state, const char *ke
 static en_error_code_t parse_path_kv(yaml_parse_state_t *state, const char *key, const char *value, char *error, size_t error_len, size_t line_no);
 static en_error_code_t parse_segment_kv(yaml_parse_state_t *state, const char *key, const char *value, char *error, size_t error_len, size_t line_no);
 static en_error_code_t parse_intent_kv(yaml_parse_state_t *state, const char *key, const char *value, char *error, size_t error_len, size_t line_no);
+static en_error_code_t parse_vpp_edge_kv(yaml_parse_state_t *state, const char *key, const char *value, char *error, size_t error_len, size_t line_no);
 static en_error_code_t parse_selection_kv(yaml_parse_state_t *state, const char *key, const char *value, char *error, size_t error_len, size_t line_no);
 static en_error_code_t parse_constraints_kv(yaml_parse_state_t *state, const char *key, const char *value);
 static en_error_code_t parse_transition_kv(yaml_parse_state_t *state, const char *key, const char *value);
@@ -56,6 +59,7 @@ static en_transition_strategy_t parse_transition_strategy(const char *value, boo
 static en_comparison_key_t parse_comparison_key(const char *value, bool *ok);
 static bool parse_bool(const char *value);
 static void copy_id(char *dst, size_t dst_len, const char *src);
+static void copy_address_without_cidr(char *dst, size_t dst_len, const char *src);
 static void yaml_normalize(en_yaml_config_t *config);
 static bool yaml_has_path(const en_yaml_config_t *config, const char *path_id);
 static bool yaml_has_tunnel(const en_yaml_config_t *config, const char *tunnel_id);
@@ -165,6 +169,19 @@ en_error_code_t en_yaml_config_validate(const en_yaml_config_t *config, char *er
             }
         }
     }
+    for (size_t i = 0; i < config->vpp_edge_count; i++) {
+        const en_vpp_edge_t *edge = &config->vpp_edges[i];
+        if (edge->node_id[0] == '\0' || edge->vpp_interface[0] == '\0' || edge->next_hop[0] == '\0') {
+            set_error(error, error_len, 0, "vpp edge requires node_id, vpp_interface, and next_hop");
+            return EN_ERR_INVALID_ARGUMENT;
+        }
+        for (size_t j = i + 1; j < config->vpp_edge_count; j++) {
+            if (strcmp(edge->node_id, config->vpp_edges[j].node_id) == 0) {
+                set_error(error, error_len, 0, "duplicate vpp edge node_id");
+                return EN_ERR_INVALID_ARGUMENT;
+            }
+        }
+    }
     return EN_ERR_NONE;
 }
 
@@ -195,9 +212,15 @@ static en_error_code_t parse_line(en_yaml_config_t *config, yaml_parse_state_t *
         state->intent = NULL;
         return EN_ERR_NONE;
     }
+    if (indent == 0 && strcmp(text, "vpp_edges:") == 0) {
+        state->top = YAML_SECTION_VPP_EDGES;
+        state->context = YAML_CONTEXT_NONE;
+        state->vpp_edge = NULL;
+        return EN_ERR_NONE;
+    }
 
     if (state->top == YAML_SECTION_NONE) {
-        set_error(error, error_len, line_no, "expected top-level tunnels:, paths:, or intents:");
+        set_error(error, error_len, line_no, "expected top-level tunnels:, paths:, intents:, or vpp_edges:");
         return EN_ERR_INVALID_ARGUMENT;
     }
 
@@ -220,6 +243,20 @@ static en_error_code_t parse_line(en_yaml_config_t *config, yaml_parse_state_t *
             state->context = YAML_CONTEXT_NONE;
             if (has_key) {
                 return parse_tunnel_kv(state, key, value, error, error_len, line_no);
+            }
+            return EN_ERR_NONE;
+        }
+
+        if (state->top == YAML_SECTION_VPP_EDGES && indent == 2) {
+            if (config->vpp_edge_count >= EN_MAX_VPP_EDGES) {
+                set_error(error, error_len, line_no, "too many vpp edges");
+                return EN_ERR_INVALID_ARGUMENT;
+            }
+            state->vpp_edge = &config->vpp_edges[config->vpp_edge_count++];
+            memset(state->vpp_edge, 0, sizeof(*state->vpp_edge));
+            state->context = YAML_CONTEXT_NONE;
+            if (has_key) {
+                return parse_vpp_edge_kv(state, key, value, error, error_len, line_no);
             }
             return EN_ERR_NONE;
         }
@@ -352,6 +389,10 @@ static en_error_code_t parse_line(en_yaml_config_t *config, yaml_parse_state_t *
         return parse_path_kv(state, key, value, error, error_len, line_no);
     }
 
+    if (state->top == YAML_SECTION_VPP_EDGES) {
+        return parse_vpp_edge_kv(state, key, value, error, error_len, line_no);
+    }
+
     if (state->top == YAML_SECTION_INTENTS) {
         if (strcmp(key, "traffic") == 0) {
             state->context = YAML_CONTEXT_INTENT_TRAFFIC;
@@ -407,6 +448,34 @@ static en_error_code_t parse_line(en_yaml_config_t *config, yaml_parse_state_t *
         return parse_intent_kv(state, key, value, error, error_len, line_no);
     }
 
+    return EN_ERR_NONE;
+}
+
+static en_error_code_t parse_vpp_edge_kv(yaml_parse_state_t *state, const char *key, const char *value, char *error, size_t error_len, size_t line_no)
+{
+    if (state->vpp_edge == NULL) {
+        set_error(error, error_len, line_no, "vpp edge field without vpp edge item");
+        return EN_ERR_INVALID_ARGUMENT;
+    }
+    if (strcmp(key, "id") == 0 || strcmp(key, "node") == 0 || strcmp(key, "node_id") == 0) {
+        copy_id(state->vpp_edge->node_id, sizeof(state->vpp_edge->node_id), value);
+    } else if (strcmp(key, "host_interface") == 0 || strcmp(key, "host_if") == 0) {
+        copy_id(state->vpp_edge->host_interface, sizeof(state->vpp_edge->host_interface), value);
+    } else if (strcmp(key, "vpp_interface") == 0 || strcmp(key, "vpp_if") == 0) {
+        copy_id(state->vpp_edge->vpp_interface, sizeof(state->vpp_edge->vpp_interface), value);
+    } else if (
+        strcmp(key, "namespace_interface") == 0 ||
+        strcmp(key, "ns_interface") == 0 ||
+        strcmp(key, "ns_if") == 0
+    ) {
+        copy_id(state->vpp_edge->namespace_interface, sizeof(state->vpp_edge->namespace_interface), value);
+    } else if (strcmp(key, "namespace_address") == 0 || strcmp(key, "ns_address") == 0 || strcmp(key, "ns_addr") == 0) {
+        copy_id(state->vpp_edge->namespace_address, sizeof(state->vpp_edge->namespace_address), value);
+    } else if (strcmp(key, "vpp_address") == 0 || strcmp(key, "vpp_addr") == 0) {
+        copy_id(state->vpp_edge->vpp_address, sizeof(state->vpp_edge->vpp_address), value);
+    } else if (strcmp(key, "next_hop") == 0) {
+        copy_id(state->vpp_edge->next_hop, sizeof(state->vpp_edge->next_hop), value);
+    }
     return EN_ERR_NONE;
 }
 
@@ -683,6 +752,23 @@ static void copy_id(char *dst, size_t dst_len, const char *src)
     snprintf(dst, dst_len, "%s", src == NULL ? "" : src);
 }
 
+static void copy_address_without_cidr(char *dst, size_t dst_len, const char *src)
+{
+    if (dst == NULL || dst_len == 0) {
+        return;
+    }
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+    size_t len = strcspn(src, "/");
+    if (len >= dst_len) {
+        len = dst_len - 1;
+    }
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+}
+
 static void yaml_normalize(en_yaml_config_t *config)
 {
     if (config == NULL) {
@@ -704,6 +790,17 @@ static void yaml_normalize(en_yaml_config_t *config)
             if (tunnel != NULL && tunnel->remote_endpoint[0] != '\0') {
                 copy_id(path->route_next_hop, sizeof(path->route_next_hop), tunnel->remote_endpoint);
             }
+        }
+    }
+    for (size_t i = 0; i < config->vpp_edge_count; i++) {
+        en_vpp_edge_t *edge = &config->vpp_edges[i];
+        if (edge->vpp_interface[0] == '\0' && edge->host_interface[0] != '\0') {
+            char host_interface[EN_MAX_ID_LEN] = {0};
+            copy_id(host_interface, sizeof(host_interface), edge->host_interface);
+            snprintf(edge->vpp_interface, sizeof(edge->vpp_interface), "host-%.58s", host_interface);
+        }
+        if (edge->next_hop[0] == '\0' && edge->namespace_address[0] != '\0') {
+            copy_address_without_cidr(edge->next_hop, sizeof(edge->next_hop), edge->namespace_address);
         }
     }
 }

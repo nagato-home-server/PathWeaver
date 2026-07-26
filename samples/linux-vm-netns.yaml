@@ -54,6 +54,23 @@ tunnels:
     local_ts: 10.10.253.0/24
     remote_ts: 10.10.2.0/24
 
+vpp_edges:
+  - node_id: site-a
+    host_interface: vpp-site-a
+    vpp_interface: host-vpp-site-a
+    namespace_interface: vpp-client
+    namespace_address: 172.16.1.2/30
+    vpp_address: 172.16.1.1/30
+    next_hop: 172.16.1.2
+
+  - node_id: site-b
+    host_interface: vpp-site-b
+    vpp_interface: host-vpp-site-b
+    namespace_interface: vpp-client
+    namespace_address: 172.16.2.2/30
+    vpp_address: 172.16.2.1/30
+    next_hop: 172.16.2.2
+
 paths:
   - id: path-via-hub
     source: site-a

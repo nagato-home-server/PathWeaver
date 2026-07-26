@@ -16,6 +16,7 @@
 #define EN_MAX_ERRORS 64
 #define EN_MAX_WAYPOINTS 8
 #define EN_MAX_COMPARISONS 8
+#define EN_MAX_VPP_EDGES 16
 
 typedef enum {
     EN_ADMIN_ENABLED = 0,
@@ -196,6 +197,16 @@ typedef struct {
     en_transition_policy_t transition;
     en_fallback_policy_t fallback;
 } en_intent_t;
+
+typedef struct {
+    char node_id[EN_MAX_ID_LEN];
+    char host_interface[EN_MAX_ID_LEN];
+    char vpp_interface[EN_MAX_ID_LEN];
+    char namespace_interface[EN_MAX_ID_LEN];
+    char namespace_address[EN_MAX_ID_LEN];
+    char vpp_address[EN_MAX_ID_LEN];
+    char next_hop[EN_MAX_ID_LEN];
+} en_vpp_edge_t;
 
 typedef struct {
     char path_id[EN_MAX_ID_LEN];

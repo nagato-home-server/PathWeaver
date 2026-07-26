@@ -38,6 +38,16 @@ static const en_intent_t *find_intent(const en_yaml_config_t *config, const char
     return NULL;
 }
 
+static const en_vpp_edge_t *find_vpp_edge(const en_yaml_config_t *config, const char *node_id)
+{
+    for (size_t i = 0; i < config->vpp_edge_count; i++) {
+        if (strcmp(config->vpp_edges[i].node_id, node_id) == 0) {
+            return &config->vpp_edges[i];
+        }
+    }
+    return NULL;
+}
+
 static const char *runtime_kind(const en_path_t *path)
 {
     if (path->segment_count == 1 && strcmp(path->segments[0].tunnel_id, "tun-a-b") == 0) {
@@ -93,6 +103,13 @@ static int write_summary(const char *filename, const en_yaml_config_t *config, c
     fprintf(file, "destination: %s\n", path->destination);
     fprintf(file, "route_destination_prefix: %s\n", path->route_destination_prefix);
     fprintf(file, "route_next_hop: %s\n", path->route_next_hop);
+    fprintf(file, "vpp_edges:\n");
+    for (size_t i = 0; i < config->vpp_edge_count; i++) {
+        const en_vpp_edge_t *edge = &config->vpp_edges[i];
+        fprintf(file, "  - node_id: %s\n", edge->node_id);
+        fprintf(file, "    vpp_interface: %s\n", edge->vpp_interface);
+        fprintf(file, "    next_hop: %s\n", edge->next_hop);
+    }
     fprintf(file, "segments:\n");
     for (size_t i = 0; i < path->segment_count; i++) {
         const en_segment_t *segment = &path->segments[i];
@@ -194,6 +211,12 @@ static int write_vpp_netns_route_plan(const char *filename, const en_yaml_config
     const char *destination_prefix = path->route_destination_prefix[0] == '\0' ?
         last_tunnel->remote_traffic_selector :
         path->route_destination_prefix;
+    const en_vpp_edge_t *source_edge = find_vpp_edge(config, path->source);
+    const en_vpp_edge_t *destination_edge = find_vpp_edge(config, path->destination);
+    const char *source_next_hop = source_edge == NULL ? "172.16.1.2" : source_edge->next_hop;
+    const char *destination_next_hop = destination_edge == NULL ? "172.16.2.2" : destination_edge->next_hop;
+    const char *source_vpp_interface = source_edge == NULL ? "host-vpp-site-a" : source_edge->vpp_interface;
+    const char *destination_vpp_interface = destination_edge == NULL ? "host-vpp-site-b" : destination_edge->vpp_interface;
 
     FILE *file = fopen(filename, "w");
     if (file == NULL) {
@@ -211,10 +234,10 @@ static int write_vpp_netns_route_plan(const char *filename, const en_yaml_config
     fprintf(file, "  fi\n");
     fprintf(file, "}\n\n");
     fprintf(file, "printf 'VPP netns route plan for path: %s\\n'\n", path->path_id);
-    fprintf(file, "printf 'source_prefix: %s via site-a VPP edge\\n'\n", source_prefix);
-    fprintf(file, "printf 'destination_prefix: %s via site-b VPP edge\\n'\n\n", destination_prefix);
-    fprintf(file, "run_vpp ip route add %s via 172.16.1.2\n", source_prefix);
-    fprintf(file, "run_vpp ip route add %s via 172.16.2.2\n", destination_prefix);
+    fprintf(file, "printf 'source_prefix: %s via %s %s\\n'\n", source_prefix, path->source, source_vpp_interface);
+    fprintf(file, "printf 'destination_prefix: %s via %s %s\\n'\n\n", destination_prefix, path->destination, destination_vpp_interface);
+    fprintf(file, "run_vpp ip route add %s via %s\n", source_prefix, source_next_hop);
+    fprintf(file, "run_vpp ip route add %s via %s\n", destination_prefix, destination_next_hop);
     fclose(file);
     return 0;
 }

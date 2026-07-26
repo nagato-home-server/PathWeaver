@@ -10,6 +10,8 @@ typedef struct {
     size_t path_count;
     en_intent_t intents[EN_MAX_CANDIDATES];
     size_t intent_count;
+    en_vpp_edge_t vpp_edges[EN_MAX_VPP_EDGES];
+    size_t vpp_edge_count;
 } en_yaml_config_t;
 
 en_error_code_t en_yaml_config_load_file(const char *filename, en_yaml_config_t *config, char *error, size_t error_len);
