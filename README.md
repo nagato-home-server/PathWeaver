@@ -12,7 +12,7 @@ VPP / strongSwan 連携を見据えた、第一段階 Controller の C 実装で
 - Explain JSONLで選択理由、除外Path、注入healthを保存する。
 - generated runtimeからstrongSwan IPsecとVPP forwardingを連続制御する。
 
-提出向けの到達点と未実装部分は `docs/mitou-submission-status.md` を参照してください。
+提出向けの到達点、デモで何を見せるか、本番実装との差分は `docs/mitou-submission-status.md` に詳しく整理しています。
 
 一発デモ:
 
