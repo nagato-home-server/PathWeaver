@@ -55,6 +55,12 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
   --active-path path-direct \
   --fail-path path-direct \
   --expect path-via-hub
+
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --step direct-ok \
+  --step direct-failed \
+  --step direct-recovered \
+  --step relay-best
 ```
 
 ## YAML Route Config

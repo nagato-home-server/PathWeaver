@@ -38,4 +38,11 @@ printf '\n== scenario: direct failure can generate runtime ==\n'
   --expect path-via-hub \
   --generate-runtime
 
+printf '\n== scenario: multi-step direct -> fallback -> recovery -> relay-best ==\n'
+"$BUILD_DIR/eventnet_scenario" "$YAML" \
+  --step direct-ok \
+  --step direct-failed \
+  --step direct-recovered \
+  --step relay-best
+
 printf '\nEventNet scenario smoke passed.\n'

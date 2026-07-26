@@ -434,6 +434,12 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
   --health path-via-relay-c=healthy,rtt=30,loss=0.1 \
   --compare packet_loss,latency,hop_count,path_id \
   --expect path-via-relay-c
+
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --step direct-ok \
+  --step direct-failed \
+  --step direct-recovered \
+  --step relay-best
 ```
 
 成功時の代表出力:
@@ -442,6 +448,13 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
 result: pass
 EventNet scenario smoke passed.
 ```
+
+`--step` は複数指定でき、代表的な連続イベントを再現する。
+
+- `direct-ok`: 通常時に `path-direct` を選ぶ。
+- `direct-failed`: active direct failureを注入し、`path-via-hub` fallbackを選ぶ。
+- `direct-recovered`: hub active状態からpriorityに従って `path-direct` へ戻る。
+- `relay-best`: injected healthでrelayが最良になるevaluated selectionを試す。
 
 ## 7. 作業時の推奨確認順
 

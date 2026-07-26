@@ -372,4 +372,10 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
   --health path-via-hub=healthy,rtt=50,loss=0.2 \
   --compare packet_loss,latency,hop_count,path_id \
   --expect path-via-relay-c
+
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --step direct-ok \
+  --step direct-failed \
+  --step direct-recovered \
+  --step relay-best
 ```

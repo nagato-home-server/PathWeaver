@@ -15,8 +15,24 @@ typedef struct {
     bool has_packet_loss_percent;
 } injected_health_t;
 
+typedef struct {
+    const char *filename;
+    const char *intent_id;
+    const char *mode;
+    const char *active_path;
+    const char *failed_path;
+    const char *expected_path;
+    const char *comparison_order;
+    bool generate;
+    injected_health_t injected[EN_MAX_PATHS];
+    size_t injected_count;
+} scenario_options_t;
+
 static const en_intent_t *find_intent(const en_yaml_config_t *config, const char *intent_id);
 static const en_path_t *find_path(const en_yaml_config_t *config, const char *path_id);
+static bool append_health(scenario_options_t *options, const char *health_arg);
+static bool apply_named_step(scenario_options_t *options, const char *step);
+static int run_scenario(const scenario_options_t *options, const char *step_name);
 static en_health_state_t parse_health_state(const char *value, bool *ok);
 static en_comparison_key_t parse_comparison_key_arg(const char *value, bool *ok);
 static bool parse_health_arg(const char *text, injected_health_t *health);
@@ -29,45 +45,120 @@ static void usage(const char *program);
 
 int main(int argc, char **argv)
 {
-    const char *filename = "samples/linux-vm-netns.yaml";
-    const char *intent_id = NULL;
-    const char *mode = NULL;
-    const char *active_path = NULL;
-    const char *failed_path = NULL;
-    const char *expected_path = NULL;
-    const char *comparison_order = NULL;
-    bool generate = false;
-    injected_health_t injected[EN_MAX_PATHS] = {0};
-    size_t injected_count = 0;
+    scenario_options_t base = {
+        .filename = "samples/linux-vm-netns.yaml",
+    };
+    const char *steps[EN_MAX_EVENTS] = {0};
+    size_t step_count = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--intent") == 0 && i + 1 < argc) {
-            intent_id = argv[++i];
+            base.intent_id = argv[++i];
         } else if (strcmp(argv[i], "--mode") == 0 && i + 1 < argc) {
-            mode = argv[++i];
+            base.mode = argv[++i];
         } else if (strcmp(argv[i], "--active-path") == 0 && i + 1 < argc) {
-            active_path = argv[++i];
+            base.active_path = argv[++i];
         } else if (strcmp(argv[i], "--fail-path") == 0 && i + 1 < argc) {
-            failed_path = argv[++i];
+            base.failed_path = argv[++i];
         } else if (strcmp(argv[i], "--health") == 0 && i + 1 < argc) {
-            if (injected_count >= EN_MAX_PATHS || !parse_health_arg(argv[++i], &injected[injected_count])) {
+            if (!append_health(&base, argv[++i])) {
                 fprintf(stderr, "invalid --health argument\n");
                 return 2;
             }
-            injected_count++;
         } else if (strcmp(argv[i], "--compare") == 0 && i + 1 < argc) {
-            comparison_order = argv[++i];
+            base.comparison_order = argv[++i];
         } else if (strcmp(argv[i], "--expect") == 0 && i + 1 < argc) {
-            expected_path = argv[++i];
+            base.expected_path = argv[++i];
+        } else if (strcmp(argv[i], "--step") == 0 && i + 1 < argc) {
+            if (step_count >= EN_MAX_EVENTS) {
+                fprintf(stderr, "too many --step arguments\n");
+                return 2;
+            }
+            steps[step_count++] = argv[++i];
         } else if (strcmp(argv[i], "--generate-runtime") == 0) {
-            generate = true;
+            base.generate = true;
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             usage(argv[0]);
             return 0;
         } else {
-            filename = argv[i];
+            base.filename = argv[i];
         }
     }
+
+    if (step_count > 0) {
+        for (size_t i = 0; i < step_count; i++) {
+            scenario_options_t step_options = base;
+            step_options.active_path = NULL;
+            step_options.failed_path = NULL;
+            step_options.expected_path = NULL;
+            step_options.injected_count = 0;
+            step_options.generate = false;
+            if (!apply_named_step(&step_options, steps[i])) {
+                fprintf(stderr, "unknown --step: %s\n", steps[i]);
+                return 2;
+            }
+            int rc = run_scenario(&step_options, steps[i]);
+            if (rc != 0) {
+                return rc;
+            }
+        }
+        printf("multi_step_result: pass\n");
+        return 0;
+    }
+
+    return run_scenario(&base, NULL);
+}
+
+static bool append_health(scenario_options_t *options, const char *health_arg)
+{
+    if (options->injected_count >= EN_MAX_PATHS) {
+        return false;
+    }
+    if (!parse_health_arg(health_arg, &options->injected[options->injected_count])) {
+        return false;
+    }
+    options->injected_count++;
+    return true;
+}
+
+static bool apply_named_step(scenario_options_t *options, const char *step)
+{
+    if (strcmp(step, "direct-ok") == 0) {
+        options->expected_path = "path-direct";
+        return true;
+    }
+    if (strcmp(step, "direct-failed") == 0 || strcmp(step, "fallback") == 0) {
+        options->active_path = "path-direct";
+        options->failed_path = "path-direct";
+        options->expected_path = "path-via-hub";
+        return true;
+    }
+    if (strcmp(step, "direct-recovered") == 0 || strcmp(step, "recovery") == 0) {
+        options->active_path = "path-via-hub";
+        options->expected_path = "path-direct";
+        return true;
+    }
+    if (strcmp(step, "relay-best") == 0) {
+        options->mode = "evaluated";
+        options->comparison_order = "packet_loss,latency,hop_count,path_id";
+        options->expected_path = "path-via-relay-c";
+        return append_health(options, "path-direct=healthy,rtt=80,loss=0.5") &&
+            append_health(options, "path-via-relay-c=healthy,rtt=30,loss=0.1") &&
+            append_health(options, "path-via-hub=healthy,rtt=50,loss=0.2");
+    }
+    return false;
+}
+
+static int run_scenario(const scenario_options_t *options, const char *step_name)
+{
+    const char *filename = options->filename;
+    const char *intent_id = options->intent_id;
+    const char *mode = options->mode;
+    const char *active_path = options->active_path;
+    const char *failed_path = options->failed_path;
+    const char *expected_path = options->expected_path;
+    const char *comparison_order = options->comparison_order;
+    bool generate = options->generate;
 
     en_yaml_config_t config = {0};
     char error[256] = {0};
@@ -95,8 +186,8 @@ int main(int argc, char **argv)
 
     en_vpp_mock_t vpp_mock = {0};
     en_health_probe_mock_t health_mock = {0};
-    for (size_t i = 0; i < injected_count; i++) {
-        apply_health_override(&health_mock, &injected[i]);
+    for (size_t i = 0; i < options->injected_count; i++) {
+        apply_health_override(&health_mock, &options->injected[i]);
     }
     if (failed_path != NULL) {
         injected_health_t health = {0};
@@ -137,8 +228,11 @@ int main(int argc, char **argv)
             snprintf(result.explanation.excluded_path_ids[0], sizeof(result.explanation.excluded_path_ids[0]), "%s", failed_path);
             snprintf(result.explanation.excluded_reasons[0], sizeof(result.explanation.excluded_reasons[0]), "%s", "active path failed event");
             result.explanation.excluded_count = 1;
+            if (step_name != NULL) {
+                printf("scenario_step: %s\n", step_name);
+            }
             print_result(&result);
-            if (generate && generate_runtime(argv[0], filename, &result, active_path, failed_path) != 0) {
+            if (generate && generate_runtime("eventnet_scenario", filename, &result, active_path, failed_path) != 0) {
                 en_controller_destroy(controller);
                 return 1;
             }
@@ -164,8 +258,11 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (step_name != NULL) {
+        printf("scenario_step: %s\n", step_name);
+    }
     print_result(&result);
-    if (generate && generate_runtime(argv[0], filename, &result, active_path, failed_path) != 0) {
+    if (generate && generate_runtime("eventnet_scenario", filename, &result, active_path, failed_path) != 0) {
         return 1;
     }
     if (expected_path != NULL) {
@@ -388,5 +485,6 @@ static void usage(const char *program)
     printf("  --health PATH=state[,rtt=N,loss=N]\n");
     printf("  --compare packet_loss,latency,hop_count,priority,path_id\n");
     printf("  --expect PATH\n");
+    printf("  --step direct-ok|direct-failed|direct-recovered|relay-best\n");
     printf("  --generate-runtime\n");
 }
