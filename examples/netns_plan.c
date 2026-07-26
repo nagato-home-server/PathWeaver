@@ -178,6 +178,47 @@ static int write_vpp_route_plan(const char *filename, const en_yaml_config_t *co
     return 0;
 }
 
+static int write_vpp_netns_route_plan(const char *filename, const en_yaml_config_t *config, const en_path_t *path)
+{
+    const en_tunnel_t *first_tunnel = NULL;
+    const en_tunnel_t *last_tunnel = NULL;
+    if (path->segment_count > 0) {
+        first_tunnel = find_tunnel(config, path->segments[0].tunnel_id);
+        last_tunnel = find_tunnel(config, path->segments[path->segment_count - 1].tunnel_id);
+    }
+    if (first_tunnel == NULL || last_tunnel == NULL) {
+        return 1;
+    }
+
+    const char *source_prefix = first_tunnel->local_traffic_selector;
+    const char *destination_prefix = path->route_destination_prefix[0] == '\0' ?
+        last_tunnel->remote_traffic_selector :
+        path->route_destination_prefix;
+
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        return 1;
+    }
+    fprintf(file, "#!/usr/bin/env sh\n");
+    fprintf(file, "set -eu\n\n");
+    fprintf(file, "VPPCTL=\"${VPPCTL:-vppctl}\"\n");
+    fprintf(file, "DRY_RUN=\"${DRY_RUN:-1}\"\n\n");
+    fprintf(file, "run_vpp() {\n");
+    fprintf(file, "  if [ \"$DRY_RUN\" = \"1\" ]; then\n");
+    fprintf(file, "    printf '[dry-run] %%s %%s\\n' \"$VPPCTL\" \"$*\"\n");
+    fprintf(file, "  else\n");
+    fprintf(file, "    \"$VPPCTL\" \"$@\"\n");
+    fprintf(file, "  fi\n");
+    fprintf(file, "}\n\n");
+    fprintf(file, "printf 'VPP netns route plan for path: %s\\n'\n", path->path_id);
+    fprintf(file, "printf 'source_prefix: %s via site-a VPP edge\\n'\n", source_prefix);
+    fprintf(file, "printf 'destination_prefix: %s via site-b VPP edge\\n'\n\n", destination_prefix);
+    fprintf(file, "run_vpp ip route add %s via 172.16.1.2\n", source_prefix);
+    fprintf(file, "run_vpp ip route add %s via 172.16.2.2\n", destination_prefix);
+    fclose(file);
+    return 0;
+}
+
 static void set_failed_health(en_health_probe_mock_t *health_mock, const char *path_id)
 {
     en_path_health_t health = {0};
@@ -315,9 +356,11 @@ selected:
     char apply_script[256] = {0};
     char summary[256] = {0};
     char vpp_plan[256] = {0};
+    char vpp_netns_plan[256] = {0};
     snprintf(apply_script, sizeof(apply_script), "%s/apply-selected.sh", out_dir);
     snprintf(summary, sizeof(summary), "%s/selected-path.txt", out_dir);
     snprintf(vpp_plan, sizeof(vpp_plan), "%s/vpp-route-plan.sh", out_dir);
+    snprintf(vpp_netns_plan, sizeof(vpp_netns_plan), "%s/vpp-netns-route-plan.sh", out_dir);
 
     if (write_apply_script(apply_script, selected_path, kind) != 0) {
         fprintf(stderr, "failed to write %s\n", apply_script);
@@ -331,6 +374,10 @@ selected:
         fprintf(stderr, "failed to write %s\n", vpp_plan);
         return 1;
     }
+    if (write_vpp_netns_route_plan(vpp_netns_plan, &config, selected_path) != 0) {
+        fprintf(stderr, "failed to write %s\n", vpp_netns_plan);
+        return 1;
+    }
 
     printf("intent: %s\n", intent->intent_id);
     printf("selected_path: %s\n", selected_path->path_id);
@@ -339,6 +386,7 @@ selected:
     printf("wrote: %s\n", apply_script);
     printf("wrote: %s\n", summary);
     printf("wrote: %s\n", vpp_plan);
+    printf("wrote: %s\n", vpp_netns_plan);
 
     return strcmp(kind, "unsupported") == 0 ? 2 : 0;
 }

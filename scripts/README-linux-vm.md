@@ -307,3 +307,11 @@ sudo sh scripts/vm-vpp-netns-clean.sh
 ```
 
 この smoke test は IPsec とは独立して、VPP が netns 間の L3 forwarding plane として使えるかを確認します。
+
+controller-generated VPP route plan を VPP netns 接続へ実適用する smoke test:
+
+```sh
+sudo sh scripts/vm-vpp-controller-netns-smoke.sh samples/linux-vm-netns.yaml
+```
+
+この smoke test は `eventnet_netns_plan` が生成する `out/netns-runtime/vpp-netns-route-plan.sh` を `DRY_RUN=0` で適用し、`10.10.1.0/24 <-> 10.10.2.0/24` の LAN traffic が VPP 経由で流れることを確認します。
