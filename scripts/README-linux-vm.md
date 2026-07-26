@@ -2,6 +2,21 @@
 
 共有フォルダ上の `controller-c` を Linux VM から実行するための最小手順です。
 
+## 0. One-shot Demo
+
+未踏提出向けの一発デモです。通常ユーザーで実行できる範囲では、build、scenario harness、Explain JSONL、runtime plan生成まで確認します。
+
+```sh
+cd /mnt/hgfs/mitou/controller-c
+sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
+```
+
+実IPsec/VPP runtimeも含める場合:
+
+```sh
+sudo RUN_RUNTIME=1 sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
+```
+
 ## 1. Dependency Check
 
 ```sh

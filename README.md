@@ -2,6 +2,30 @@
 
 VPP / strongSwan 連携を見据えた、第一段階 Controller の C 実装です。
 
+## Current Prototype Status
+
+未踏提出向けプロトタイプとして、以下を実証済みです。
+
+- YAMLでIntent、Path、Tunnel、VPP edgeを宣言する。
+- Controllerがpriority / fallback / evaluated policyでPathを選択する。
+- scenario harnessでdirect障害、hub fallback、direct回復、品質条件評価を再現する。
+- Explain JSONLで選択理由、除外Path、注入healthを保存する。
+- generated runtimeからstrongSwan IPsecとVPP forwardingを連続制御する。
+
+提出向けの到達点と未実装部分は `docs/mitou-submission-status.md` を参照してください。
+
+一発デモ:
+
+```sh
+sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
+```
+
+実IPsec/VPPまで実行する場合:
+
+```sh
+sudo RUN_RUNTIME=1 sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
+```
+
 ## Scope
 
 - Intent / Path / Segment / Tunnel のモデル

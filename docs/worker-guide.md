@@ -483,6 +483,7 @@ Linux VMでは以下の順が安全です。
 ```sh
 cd /mnt/hgfs/mitou/controller-c
 git pull
+sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
 sh scripts/vm-build-cc.sh
 sudo sh scripts/vm-netns-setup.sh
 sudo sh scripts/vm-controller-integrated-runtime-smoke.sh samples/linux-vm-netns.yaml
