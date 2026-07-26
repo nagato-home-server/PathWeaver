@@ -1,0 +1,151 @@
+tunnels:
+  - id: tun-a-hub
+    local_node: site-a
+    remote_node: hub-1
+    local_endpoint: 203.0.113.10
+    remote_endpoint: 203.0.113.1
+    local_id: site-a
+    remote_id: hub-1
+    psk: "change-me"
+    local_ts: 10.0.1.0/24
+    remote_ts: 10.0.254.0/24
+
+  - id: tun-hub-b
+    local_node: hub-1
+    remote_node: site-b
+    local_endpoint: 203.0.113.1
+    remote_endpoint: 203.0.113.20
+    local_id: hub-1
+    remote_id: site-b
+    psk: "change-me"
+    local_ts: 10.0.254.0/24
+    remote_ts: 10.0.2.0/24
+
+  - id: tun-a-b
+    local_node: site-a
+    remote_node: site-b
+    local_endpoint: 203.0.113.10
+    remote_endpoint: 203.0.113.20
+    local_id: site-a
+    remote_id: site-b
+    psk: "change-me"
+    local_ts: 10.0.1.0/24
+    remote_ts: 10.0.2.0/24
+
+  - id: tun-a-relay-c
+    local_node: site-a
+    remote_node: relay-c
+    local_endpoint: 203.0.113.10
+    remote_endpoint: 203.0.113.30
+    local_id: site-a
+    remote_id: relay-c
+    psk: "change-me"
+    local_ts: 10.0.1.0/24
+    remote_ts: 10.0.253.0/24
+
+  - id: tun-relay-c-b
+    local_node: relay-c
+    remote_node: site-b
+    local_endpoint: 203.0.113.30
+    remote_endpoint: 203.0.113.20
+    local_id: relay-c
+    remote_id: site-b
+    psk: "change-me"
+    local_ts: 10.0.253.0/24
+    remote_ts: 10.0.2.0/24
+
+paths:
+  - id: path-via-hub
+    source: site-a
+    destination: site-b
+    route_destination_prefix: 10.0.2.0/24
+    route_next_hop: 203.0.113.1
+    egress_tunnel_id: tun-a-hub
+    waypoints:
+      - hub-1
+    priority: 30
+    segments:
+      - id: seg-a-hub
+        from: site-a
+        to: hub-1
+        tunnel_id: tun-a-hub
+      - id: seg-hub-b
+        from: hub-1
+        to: site-b
+        tunnel_id: tun-hub-b
+
+  - id: path-direct
+    source: site-a
+    destination: site-b
+    route_destination_prefix: 10.0.2.0/24
+    route_next_hop: 203.0.113.20
+    egress_tunnel_id: tun-a-b
+    priority: 10
+    segments:
+      - id: seg-a-b
+        from: site-a
+        to: site-b
+        tunnel_id: tun-a-b
+
+  - id: path-via-relay-c
+    source: site-a
+    destination: site-b
+    route_destination_prefix: 10.0.2.0/24
+    route_next_hop: 203.0.113.30
+    egress_tunnel_id: tun-a-relay-c
+    waypoints:
+      - relay-c
+    priority: 20
+    segments:
+      - id: seg-a-relay-c
+        from: site-a
+        to: relay-c
+        tunnel_id: tun-a-relay-c
+      - id: seg-relay-c-b
+        from: relay-c
+        to: site-b
+        tunnel_id: tun-relay-c-b
+
+intents:
+  - id: intent-a-b
+    traffic:
+      source: site-a
+      destination: site-b
+    path_selection:
+      mode: priority
+      candidates:
+        - path-direct
+        - path-via-relay-c
+        - path-via-hub
+    transition:
+      strategy: graceful
+      max_pause_ms: 10
+      drain_timeout_ms: 10
+    fallback:
+      enabled: true
+      path_id: path-via-hub
+
+  - id: intent-a-b-evaluated
+    traffic:
+      source: site-a
+      destination: site-b
+    path_selection:
+      mode: evaluated
+      candidates:
+        - path-direct
+        - path-via-relay-c
+        - path-via-hub
+      constraints:
+        max_rtt_ms: 100
+        max_packet_loss_percent: 1.0
+      comparison_order:
+        - packet_loss
+        - latency
+        - hop_count
+        - administrative_priority
+        - path_id
+    transition:
+      strategy: immediate
+    fallback:
+      enabled: true
+      path_id: path-via-hub
