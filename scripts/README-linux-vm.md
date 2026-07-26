@@ -347,3 +347,29 @@ sudo MODE=both sh scripts/vm-controller-integrated-runtime-smoke.sh samples/linu
 - VPP forwarding smoke
 
 まだ「同一packetをIPsec復号後にVPPで転送する本番gateway pipeline」ではありません。そこは次段階で、Linux/VPP interface設計とXFRM/VPP接続を詰めます。
+
+## 13. Scenario Harness Smoke
+
+本番 `eventnetd` の前段として、path selection / fallback / evaluated policyをCLI引数で実験できます。
+
+```sh
+sh scripts/vm-build-cc.sh
+sh scripts/vm-eventnet-scenario-smoke.sh samples/linux-vm-netns.yaml
+```
+
+個別に実行する場合:
+
+```sh
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --active-path path-direct \
+  --fail-path path-direct \
+  --expect path-via-hub
+
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --mode evaluated \
+  --health path-direct=healthy,rtt=80,loss=0.5 \
+  --health path-via-relay-c=healthy,rtt=30,loss=0.1 \
+  --health path-via-hub=healthy,rtt=50,loss=0.2 \
+  --compare packet_loss,latency,hop_count,path_id \
+  --expect path-via-relay-c
+```

@@ -28,6 +28,7 @@ cd "$ROOT_DIR"
 
 $CC $CFLAGS -Iinclude $COMMON_SRCS examples/yaml_demo.c -o "$BUILD_DIR/eventnet_yaml_demo"
 $CC $CFLAGS -Iinclude $COMMON_SRCS examples/netns_plan.c -o "$BUILD_DIR/eventnet_netns_plan"
+$CC $CFLAGS -Iinclude $COMMON_SRCS examples/eventnet_scenario.c -o "$BUILD_DIR/eventnet_scenario"
 $CC $CFLAGS -Iinclude $COMMON_SRCS examples/demo.c -o "$BUILD_DIR/eventnet_demo"
 $CC $CFLAGS -Iinclude $COMMON_SRCS tests/test_controller.c -o "$BUILD_DIR/eventnet_tests"
 

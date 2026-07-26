@@ -406,6 +406,43 @@ Controller integrated runtime smoke passed: MODE=direct
 Controller integrated runtime smoke passed: MODE=fallback
 ```
 
+### Scenario harness
+
+- `examples/eventnet_scenario.c`
+  - 本番daemon化前に、path selection / fallback / evaluated policyをCLI引数で実験する。
+- `scripts/vm-eventnet-scenario-smoke.sh`
+  - scenario harnessの代表ケースをまとめて確認する。
+
+実行例:
+
+```sh
+sh scripts/vm-build-cc.sh
+sh scripts/vm-eventnet-scenario-smoke.sh samples/linux-vm-netns.yaml
+```
+
+個別例:
+
+```sh
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --active-path path-direct \
+  --fail-path path-direct \
+  --expect path-via-hub
+
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --mode evaluated \
+  --health path-direct=healthy,rtt=80,loss=0.5 \
+  --health path-via-relay-c=healthy,rtt=30,loss=0.1 \
+  --compare packet_loss,latency,hop_count,path_id \
+  --expect path-via-relay-c
+```
+
+成功時の代表出力:
+
+```text
+result: pass
+EventNet scenario smoke passed.
+```
+
 ## 7. 作業時の推奨確認順
 
 Linux VMでは以下の順が安全です。
@@ -484,3 +521,8 @@ sudo sh scripts/vm-netns-ipsec-hub-stop.sh
   - fallbackやevaluated selectionを触るならここ。
 - `scripts/vm-controller-integrated-runtime-smoke.sh`
   - デモの入口を増やすならここ。
+
+関連資料:
+
+- `docs/scenario-vs-production.md`
+  - `eventnet_scenario` と本番 `eventnetd` の差分、共通化する部分、本番化までに必要な実装を整理している。

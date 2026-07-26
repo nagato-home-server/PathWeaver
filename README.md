@@ -39,6 +39,24 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\eventnet_demo.exe
 ```
 
+## Scenario Harness
+
+`eventnet_scenario` は、本番daemon化前にpath selection / fallback / evaluated policyを実験するためのCLIです。
+
+```sh
+sh scripts/vm-build-cc.sh
+sh scripts/vm-eventnet-scenario-smoke.sh samples/linux-vm-netns.yaml
+```
+
+例:
+
+```sh
+build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
+  --active-path path-direct \
+  --fail-path path-direct \
+  --expect path-via-hub
+```
+
 ## YAML Route Config
 
 `samples/ipsec-routes.yaml` で Tunnel、Path、Intent を定義できます。
@@ -116,3 +134,5 @@ Linux 実機では `swanctl`、`vppctl`、root 権限、VPP 側の next-hop 到�
 Linux VM の共有フォルダで試す場合は、`scripts/README-linux-vm.md` の順序で実行してください。
 
 他作業者向けのファイル構成、主要関数、生成出力の説明は `docs/worker-guide.md` を参照してください。
+
+scenario harness と本番 `eventnetd` の差分は `docs/scenario-vs-production.md` を参照してください。

@@ -39,6 +39,9 @@ target_link_libraries(eventnet_yaml_demo PRIVATE eventnet_controller)
 add_executable(eventnet_netns_plan examples/netns_plan.c)
 target_link_libraries(eventnet_netns_plan PRIVATE eventnet_controller)
 
+add_executable(eventnet_scenario examples/eventnet_scenario.c)
+target_link_libraries(eventnet_scenario PRIVATE eventnet_controller)
+
 enable_testing()
 add_executable(eventnet_tests tests/test_controller.c)
 target_link_libraries(eventnet_tests PRIVATE eventnet_controller)
