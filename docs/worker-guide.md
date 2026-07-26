@@ -439,7 +439,8 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
   --step direct-ok \
   --step direct-failed \
   --step direct-recovered \
-  --step relay-best
+  --step relay-best \
+  --explain-json out/scenario/multistep-explain.jsonl
 ```
 
 成功時の代表出力:
@@ -455,6 +456,25 @@ EventNet scenario smoke passed.
 - `direct-failed`: active direct failureを注入し、`path-via-hub` fallbackを選ぶ。
 - `direct-recovered`: hub active状態からpriorityに従って `path-direct` へ戻る。
 - `relay-best`: injected healthでrelayが最良になるevaluated selectionを試す。
+
+`--explain-json FILE` を指定すると、各scenario判断をJSON Lines形式で追記する。
+
+主なfield:
+
+- `schema`
+- `scenario_step`
+- `yaml`
+- `intent`
+- `selection_mode`
+- `active_path`
+- `failed_path`
+- `selected_path`
+- `transition_state`
+- `reason`
+- `expect`
+- `result`
+- `excluded`
+- `injected_health`
 
 ## 7. 作業時の推奨確認順
 

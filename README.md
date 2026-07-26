@@ -60,8 +60,11 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
   --step direct-ok \
   --step direct-failed \
   --step direct-recovered \
-  --step relay-best
+  --step relay-best \
+  --explain-json out/scenario/multistep-explain.jsonl
 ```
+
+`--explain-json` を指定すると、選択理由、除外path、注入health、期待結果をJSON Lines形式で出力します。
 
 ## YAML Route Config
 

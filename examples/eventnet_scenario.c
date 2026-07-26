@@ -23,6 +23,7 @@ typedef struct {
     const char *failed_path;
     const char *expected_path;
     const char *comparison_order;
+    const char *explain_json;
     bool generate;
     injected_health_t injected[EN_MAX_PATHS];
     size_t injected_count;
@@ -33,6 +34,7 @@ static const en_path_t *find_path(const en_yaml_config_t *config, const char *pa
 static bool append_health(scenario_options_t *options, const char *health_arg);
 static bool apply_named_step(scenario_options_t *options, const char *step);
 static int run_scenario(const scenario_options_t *options, const char *step_name);
+static bool append_json_event(const scenario_options_t *options, const en_reconcile_result_t *result, const char *step_name, bool expect_pass);
 static en_health_state_t parse_health_state(const char *value, bool *ok);
 static en_comparison_key_t parse_comparison_key_arg(const char *value, bool *ok);
 static bool parse_health_arg(const char *text, injected_health_t *health);
@@ -40,6 +42,7 @@ static void apply_health_override(en_health_probe_mock_t *health_mock, const inj
 static bool force_selection_mode(en_intent_t *intent, const char *mode);
 static bool force_comparison_order(en_intent_t *intent, const char *value);
 static void print_result(const en_reconcile_result_t *result);
+static void json_string(FILE *file, const char *value);
 static int generate_runtime(const char *program, const char *yaml, const en_reconcile_result_t *result, const char *active_path, const char *failed_path);
 static void usage(const char *program);
 
@@ -69,6 +72,8 @@ int main(int argc, char **argv)
             base.comparison_order = argv[++i];
         } else if (strcmp(argv[i], "--expect") == 0 && i + 1 < argc) {
             base.expected_path = argv[++i];
+        } else if (strcmp(argv[i], "--explain-json") == 0 && i + 1 < argc) {
+            base.explain_json = argv[++i];
         } else if (strcmp(argv[i], "--step") == 0 && i + 1 < argc) {
             if (step_count >= EN_MAX_EVENTS) {
                 fprintf(stderr, "too many --step arguments\n");
@@ -86,6 +91,9 @@ int main(int argc, char **argv)
     }
 
     if (step_count > 0) {
+        if (base.explain_json != NULL) {
+            remove(base.explain_json);
+        }
         for (size_t i = 0; i < step_count; i++) {
             scenario_options_t step_options = base;
             step_options.active_path = NULL;
@@ -237,7 +245,12 @@ static int run_scenario(const scenario_options_t *options, const char *step_name
                 return 1;
             }
             en_controller_destroy(controller);
-            if (expected_path != NULL && strcmp(result.selected_path, expected_path) != 0) {
+            bool expect_pass = expected_path == NULL || strcmp(result.selected_path, expected_path) == 0;
+            if (!append_json_event(options, &result, step_name, expect_pass)) {
+                en_controller_destroy(controller);
+                return 1;
+            }
+            if (expected_path != NULL && !expect_pass) {
                 printf("expect: %s\n", expected_path);
                 printf("result: fail\n");
                 return 1;
@@ -268,10 +281,16 @@ static int run_scenario(const scenario_options_t *options, const char *step_name
     if (expected_path != NULL) {
         printf("expect: %s\n", expected_path);
         if (strcmp(result.selected_path, expected_path) != 0) {
+            if (!append_json_event(options, &result, step_name, false)) {
+                return 1;
+            }
             printf("result: fail\n");
             return 1;
         }
         printf("result: pass\n");
+    }
+    if (!append_json_event(options, &result, step_name, true)) {
+        return 1;
     }
     return 0;
 }
@@ -447,6 +466,93 @@ static void print_result(const en_reconcile_result_t *result)
     }
 }
 
+static bool append_json_event(const scenario_options_t *options, const en_reconcile_result_t *result, const char *step_name, bool expect_pass)
+{
+    if (options->explain_json == NULL) {
+        return true;
+    }
+    FILE *file = fopen(options->explain_json, "a");
+    if (file == NULL) {
+        fprintf(stderr, "failed to open explain json: %s\n", options->explain_json);
+        return false;
+    }
+    fprintf(file, "{");
+    fprintf(file, "\"schema\":\"eventnet.scenario.explain.v1\",");
+    fprintf(file, "\"scenario_step\":");
+    json_string(file, step_name == NULL ? "single" : step_name);
+    fprintf(file, ",");
+    fprintf(file, "\"yaml\":");
+    json_string(file, options->filename);
+    fprintf(file, ",");
+    fprintf(file, "\"intent\":");
+    json_string(file, result->intent_id);
+    fprintf(file, ",");
+    fprintf(file, "\"selection_mode\":");
+    json_string(file, options->mode == NULL ? "yaml" : options->mode);
+    fprintf(file, ",");
+    fprintf(file, "\"active_path\":");
+    json_string(file, options->active_path == NULL ? "" : options->active_path);
+    fprintf(file, ",");
+    fprintf(file, "\"failed_path\":");
+    json_string(file, options->failed_path == NULL ? "" : options->failed_path);
+    fprintf(file, ",");
+    fprintf(file, "\"selected_path\":");
+    json_string(file, result->selected_path);
+    fprintf(file, ",");
+    fprintf(file, "\"transition_state\":");
+    json_string(file, en_transition_state_name(result->transition_state));
+    fprintf(file, ",");
+    fprintf(file, "\"reason\":");
+    json_string(file, result->explanation.reason);
+    fprintf(file, ",");
+    fprintf(file, "\"expect\":");
+    json_string(file, options->expected_path == NULL ? "" : options->expected_path);
+    fprintf(file, ",");
+    fprintf(file, "\"result\":");
+    json_string(file, expect_pass ? "pass" : "fail");
+    fprintf(file, ",");
+    fprintf(file, "\"excluded\":[");
+    for (size_t i = 0; i < result->explanation.excluded_count; i++) {
+        fprintf(file, "%s{\"path_id\":", i == 0 ? "" : ",");
+        json_string(file, result->explanation.excluded_path_ids[i]);
+        fprintf(file, ",\"reason\":");
+        json_string(file, result->explanation.excluded_reasons[i]);
+        fprintf(file, "}");
+    }
+    fprintf(file, "],");
+    fprintf(file, "\"injected_health\":[");
+    for (size_t i = 0; i < options->injected_count; i++) {
+        const injected_health_t *health = &options->injected[i];
+        fprintf(file, "%s{\"path_id\":", i == 0 ? "" : ",");
+        json_string(file, health->path_id);
+        fprintf(file, ",\"state\":");
+        json_string(file, en_health_state_name(health->state));
+        fprintf(file, ",\"rtt_ms\":%.3f,\"packet_loss_percent\":%.3f}", health->has_rtt_ms ? health->rtt_ms : 10.0, health->has_packet_loss_percent ? health->packet_loss_percent : 0.0);
+    }
+    fprintf(file, "]}\n");
+    fclose(file);
+    printf("explain_json: %s\n", options->explain_json);
+    return true;
+}
+
+static void json_string(FILE *file, const char *value)
+{
+    fputc('"', file);
+    if (value != NULL) {
+        for (const char *cursor = value; *cursor != '\0'; cursor++) {
+            if (*cursor == '"' || *cursor == '\\') {
+                fputc('\\', file);
+                fputc(*cursor, file);
+            } else if (*cursor == '\n') {
+                fputs("\\n", file);
+            } else {
+                fputc(*cursor, file);
+            }
+        }
+    }
+    fputc('"', file);
+}
+
 static int generate_runtime(const char *program, const char *yaml, const en_reconcile_result_t *result, const char *active_path, const char *failed_path)
 {
     (void)program;
@@ -485,6 +591,7 @@ static void usage(const char *program)
     printf("  --health PATH=state[,rtt=N,loss=N]\n");
     printf("  --compare packet_loss,latency,hop_count,priority,path_id\n");
     printf("  --expect PATH\n");
+    printf("  --explain-json FILE\n");
     printf("  --step direct-ok|direct-failed|direct-recovered|relay-best\n");
     printf("  --generate-runtime\n");
 }

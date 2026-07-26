@@ -4,8 +4,10 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build-linux-cc}"
 YAML="${1:-samples/linux-vm-netns.yaml}"
+OUT_DIR="${OUT_DIR:-$ROOT_DIR/out/scenario}"
 
 cd "$ROOT_DIR"
+mkdir -p "$OUT_DIR"
 
 if [ ! -x "$BUILD_DIR/eventnet_scenario" ]; then
   printf 'eventnet_scenario not found. Run sh scripts/vm-build-cc.sh first.\n' >&2
@@ -43,6 +45,11 @@ printf '\n== scenario: multi-step direct -> fallback -> recovery -> relay-best =
   --step direct-ok \
   --step direct-failed \
   --step direct-recovered \
-  --step relay-best
+  --step relay-best \
+  --explain-json "$OUT_DIR/multistep-explain.jsonl"
+
+grep -q '"selected_path":"path-via-hub"' "$OUT_DIR/multistep-explain.jsonl"
+grep -q '"selected_path":"path-via-relay-c"' "$OUT_DIR/multistep-explain.jsonl"
+printf 'explain_jsonl_written: %s\n' "$OUT_DIR/multistep-explain.jsonl"
 
 printf '\nEventNet scenario smoke passed.\n'

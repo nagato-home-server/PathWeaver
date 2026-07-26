@@ -377,5 +377,12 @@ build-linux-cc/eventnet_scenario samples/linux-vm-netns.yaml \
   --step direct-ok \
   --step direct-failed \
   --step direct-recovered \
-  --step relay-best
+  --step relay-best \
+  --explain-json out/scenario/multistep-explain.jsonl
+```
+
+JSON出力を確認する場合:
+
+```sh
+cat out/scenario/multistep-explain.jsonl
 ```
