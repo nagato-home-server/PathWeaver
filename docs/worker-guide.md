@@ -481,7 +481,7 @@ EventNet scenario smoke passed.
 Linux VMでは以下の順が安全です。
 
 ```sh
-cd /mnt/hgfs/mitou/controller-c
+cd controller
 git pull
 sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
 sh scripts/vm-build-cc.sh
@@ -506,7 +506,6 @@ sudo sh scripts/vm-netns-ipsec-hub-status.sh
 Ubuntu標準aptに無い場合があります。
 
 ```sh
-sh scripts/vm-vpp-os-info.sh
 sudo DRY_RUN=0 sh scripts/vm-install-vpp-fdio.sh
 ```
 
@@ -515,15 +514,18 @@ sudo DRY_RUN=0 sh scripts/vm-install-vpp-fdio.sh
 DNS / outbound networkを確認します。
 
 ```sh
-sh scripts/vm-network-dns-check.sh packagecloud.io
+getent hosts packagecloud.io
+curl -I https://packagecloud.io/
 ```
 
 ### charonが起動しない
 
-まずdefault strongSwan confで起動できるかを確認します。
+まずruntime状態とdirect/hubのログを確認します。
 
 ```sh
-sudo sh scripts/vm-charon-config-probe.sh
+sh scripts/vm-runtime-status.sh
+sh scripts/vm-netns-ipsec-direct-logs.sh
+sh scripts/vm-netns-ipsec-hub-logs.sh
 ```
 
 ### directとhubのcharonが衝突する

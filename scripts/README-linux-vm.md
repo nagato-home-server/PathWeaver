@@ -1,13 +1,35 @@
 # Linux VM Smoke Test
 
-共有フォルダ上の `controller-c` を Linux VM から実行するための最小手順です。
+共有フォルダ上の `controller` を Linux VM から実行するための最小手順です。
+
+## Script Map
+
+まず迷ったら、次の順に使います。
+
+| 目的 | スクリプト |
+| --- | --- |
+| 依存確認 | `vm-check.sh`, `vm-runtime-status.sh` |
+| shell構文確認 | `vm-shell-check.sh` |
+| build | `vm-build-cc.sh`, `vm-build.sh` |
+| 一発デモ | `demo-mitou.sh` |
+| scenario実験 | `vm-eventnet-scenario-smoke.sh` |
+| netns underlay | `vm-netns-setup.sh`, `vm-netns-smoke.sh`, `vm-netns-clean.sh` |
+| direct IPsec | `vm-netns-ipsec-direct-*.sh` |
+| hub IPsec | `vm-netns-ipsec-hub-*.sh` |
+| VPP準備 | `vm-vpp-preflight.sh`, `vm-install-vpp-fdio.sh` |
+| VPP netns | `vm-vpp-netns-*.sh`, `vm-vpp-controller-netns-smoke.sh` |
+| controller netns | `vm-netns-controller-smoke.sh` |
+| controller統合 | `vm-controller-integrated-runtime-smoke.sh` |
+
+root が必要なスクリプトは `sudo sh scripts/<script>.sh` で実行します。
+通常ユーザーでよいものは `sh scripts/<script>.sh` で実行します。
 
 ## 0. One-shot Demo
 
 未踏提出向けの一発デモです。通常ユーザーで実行できる範囲では、build、scenario harness、Explain JSONL、runtime plan生成まで確認します。
 
 ```sh
-cd /mnt/hgfs/mitou/controller-c
+cd controller
 sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
 ```
 
@@ -20,8 +42,9 @@ sudo RUN_RUNTIME=1 sh scripts/demo-mitou.sh samples/linux-vm-netns.yaml
 ## 1. Dependency Check
 
 ```sh
-cd /path/to/controller-c
+cd controller
 sh scripts/vm-check.sh
+sh scripts/vm-shell-check.sh
 ```
 
 足りないものが出たら、VM 側でインストールしてください。
@@ -90,18 +113,19 @@ sudo sh scripts/vm-netns-smoke.sh
 sudo sh scripts/vm-netns-clean.sh
 ```
 
-## Current Limit
+## Current Runtime Shape
 
-この段階では `swanctl.conf` と apply script の生成、および namespace underlay の作成までです。
+現在は、Linux VM 一台で次の段階まで確認できます。
 
-実際に namespace 内で strongSwan / VPP を動かすには、次の追加が必要です。
+- namespace underlay の direct / hub / relay L3疎通
+- namespace 内の strongSwan direct IPsec
+- namespace 内の strongSwan hub IPsec
+- VPP host-interface による namespace間 forwarding
+- controller-generated VPP route plan の実適用
+- controller-generated plan による IPsec + VPP 統合 smoke
 
-- namespace ごとの strongSwan daemon 起動
-- namespace ごとの `swanctl --load-conns`
-- VPP と namespace の interface 接続
-- VPP route table と tunnel interface の対応づけ
-
-次の実装ステップは、`site-a` namespace 内だけで `swanctl.conf` を load し、`site-b` と direct IKE SA を確立するスクリプトです。
+まだ「同一packetをIPsec復号後にVPPへ渡す本番gateway pipeline」ではありません。
+そこは次段階で、XFRM interface と VPP interface の接続設計を詰めます。
 
 ## 6. Direct IPsec Config Generation
 
@@ -209,19 +233,19 @@ sh out/netns-runtime/apply-selected.sh
 direct と hub の両方を controller 生成 wrapper 経由で連続確認する smoke test:
 
 ```sh
-sh scripts/vm-netns-controller-switch-smoke.sh samples/linux-vm-netns.yaml
+sh scripts/vm-netns-controller-smoke.sh switch samples/linux-vm-netns.yaml
 ```
 
 active direct path の failure event を注入し、YAML の fallback policy で hub を選ぶ smoke test:
 
 ```sh
-sh scripts/vm-netns-controller-fallback-smoke.sh samples/linux-vm-netns.yaml
+sh scripts/vm-netns-controller-smoke.sh fallback samples/linux-vm-netns.yaml
 ```
 
 direct failure 後に hub fallback へ移り、direct recovery で priority direct へ戻る smoke test:
 
 ```sh
-sh scripts/vm-netns-controller-recovery-smoke.sh samples/linux-vm-netns.yaml
+sh scripts/vm-netns-controller-smoke.sh recovery samples/linux-vm-netns.yaml
 ```
 
 手動で見る場合:
@@ -246,18 +270,6 @@ VPP の有無を確認:
 sh scripts/vm-vpp-preflight.sh
 ```
 
-標準 apt で `vpp` / `vpp-plugin-core` が見つからない場合、OS と apt source を確認します。
-
-```sh
-sh scripts/vm-vpp-os-info.sh
-```
-
-FD.io repository の取得で `Could not resolve host: packagecloud.io` が出る場合は、VM の DNS / outbound network を確認します。
-
-```sh
-sh scripts/vm-network-dns-check.sh packagecloud.io
-```
-
 FD.io packagecloud repository を使う場合、まず dry-run で内容を確認します。
 
 ```sh
@@ -269,6 +281,13 @@ sudo sh scripts/vm-install-vpp-fdio.sh
 ```sh
 sudo DRY_RUN=0 sh scripts/vm-install-vpp-fdio.sh
 sh scripts/vm-vpp-preflight.sh
+```
+
+FD.io repository の取得で `Could not resolve host: packagecloud.io` が出る場合は、VM の DNS / outbound network を確認します。
+
+```sh
+getent hosts packagecloud.io
+curl -I https://packagecloud.io/
 ```
 
 VPP が未導入でも、dry-run の route plan は確認できます。

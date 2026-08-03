@@ -86,11 +86,9 @@ if ! getent hosts packagecloud.io >/dev/null 2>&1; then
   cat <<'MSG' >&2
 DNS lookup failed for packagecloud.io.
 
-Run:
-  sh scripts/vm-network-dns-check.sh packagecloud.io
-
-If raw IP connectivity works but DNS fails, fix the VM DNS settings before
-retrying the VPP install.
+Check the VM DNS/outbound network, for example:
+  getent hosts packagecloud.io
+  curl -I https://packagecloud.io/
 MSG
   exit 1
 fi
@@ -100,8 +98,7 @@ if ! curl -fsSL "$PACKAGECLOUD_SCRIPT_URL" -o "$tmp_script"; then
 Failed to download FD.io packagecloud setup script:
   $PACKAGECLOUD_SCRIPT_URL
 
-Run:
-  sh scripts/vm-network-dns-check.sh packagecloud.io
+Check DNS, proxy, TLS interception, or outbound firewall settings before retrying.
 MSG
   exit 1
 fi

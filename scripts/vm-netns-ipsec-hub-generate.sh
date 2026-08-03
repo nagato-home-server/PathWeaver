@@ -3,8 +3,16 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUT_DIR="${OUT_DIR:-$ROOT_DIR/out/netns-ipsec-hub}"
-PSK="${PSK:-change-me}"
+PSK="${PSK:-}"
 
+if [ -z "$PSK" ]; then
+  PSK=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+elif [ "$PSK" = "change-me" ]; then
+  printf 'Refusing insecure PSK value: change-me\n' >&2
+  exit 1
+fi
+
+umask 077
 mkdir -p "$OUT_DIR/site-a" "$OUT_DIR/hub-1" "$OUT_DIR/site-b"
 
 cat > "$OUT_DIR/site-a/swanctl.conf" <<EOF
@@ -44,6 +52,7 @@ secrets {
   }
 }
 EOF
+chmod 600 "$OUT_DIR/site-a/swanctl.conf"
 
 cat > "$OUT_DIR/hub-1/swanctl.conf" <<EOF
 connections {
@@ -113,6 +122,7 @@ secrets {
   }
 }
 EOF
+chmod 600 "$OUT_DIR/hub-1/swanctl.conf"
 
 cat > "$OUT_DIR/site-b/swanctl.conf" <<EOF
 connections {
@@ -151,6 +161,7 @@ secrets {
   }
 }
 EOF
+chmod 600 "$OUT_DIR/site-b/swanctl.conf"
 
 cat > "$OUT_DIR/README.txt" <<EOF
 Generated hub IPsec configs:

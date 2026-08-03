@@ -98,7 +98,7 @@ load_node() {
   uri="unix://$run_dir/charon.vici"
 
   cp "$node_dir/swanctl.conf" "$swanctl_conf"
-  chmod 644 "$swanctl_conf"
+  chmod 600 "$swanctl_conf"
   if [ ! -r "$swanctl_conf" ]; then
     printf 'swanctl config is not readable: %s\n' "$swanctl_conf" >&2
     exit 1
@@ -107,8 +107,7 @@ load_node() {
   swanctl --load-conns --uri "$uri" --file "$swanctl_conf"
   swanctl --load-creds --uri "$uri" --file "$swanctl_conf"
   if ! swanctl --list-conns --uri "$uri" 2>/dev/null | grep -q 'tun-a-b'; then
-    printf 'swanctl did not load tun-a-b for %s. Config follows:\n' "$ns" >&2
-    cat "$swanctl_conf" >&2
+    printf 'swanctl did not load tun-a-b for %s. Config was not printed because it contains secrets: %s\n' "$ns" "$swanctl_conf" >&2
     exit 1
   fi
 }

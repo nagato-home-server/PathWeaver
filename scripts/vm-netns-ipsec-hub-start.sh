@@ -97,14 +97,13 @@ load_node() {
   uri="unix://$run_dir/charon.vici"
 
   cp "$node_dir/swanctl.conf" "$swanctl_conf"
-  chmod 644 "$swanctl_conf"
+  chmod 600 "$swanctl_conf"
   printf 'Loading swanctl config for %s...\n' "$ns"
   swanctl --load-conns --uri "$uri" --file "$swanctl_conf"
   swanctl --load-creds --uri "$uri" --file "$swanctl_conf"
   for child in $expected; do
     if ! swanctl --list-conns --uri "$uri" 2>/dev/null | grep -q "$child"; then
-      printf 'swanctl did not load %s for %s. Config follows:\n' "$child" "$ns" >&2
-      cat "$swanctl_conf" >&2
+      printf 'swanctl did not load %s for %s. Config was not printed because it contains secrets: %s\n' "$child" "$ns" "$swanctl_conf" >&2
       exit 1
     fi
   done
