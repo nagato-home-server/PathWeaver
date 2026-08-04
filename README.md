@@ -1,4 +1,4 @@
-# PathWeaver
+# Ibuki
 
 PathWeaver is an event-driven IPsec path controller written in C.
 
